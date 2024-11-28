@@ -6,6 +6,8 @@ public class HotelConfig
 
     public string? HotelName { get; set; }
 
+    public string? OtherHotelName { get; set; }
+
     public string? ConnectionString { get; set; }
 
     public string? TimeZone { get; set; }

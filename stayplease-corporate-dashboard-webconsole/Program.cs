@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using stayplease_corporate_dashboard_webconsole.Services;
 
 namespace stayplease_corporate_dashboard_webconsole
@@ -40,6 +41,13 @@ namespace stayplease_corporate_dashboard_webconsole
 
         private static void ConfigureServices(IServiceCollection services)
         {
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                //.AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development"}.json", optional: true)
+                .Build();
+            services.AddSingleton<IConfiguration>(configuration);
+
             services.AddSingleton<DataAggregationScheduler>();
             services.AddSingleton<HotelConfiguration>();
             services.AddSingleton<IDataAggregationService, DataAggregationService>();
@@ -73,13 +81,24 @@ namespace stayplease_corporate_dashboard_webconsole
                         return;
                     }
 
-                    if (!DateTime.TryParse(parts[2], out var date))
+                    if (!DateTime.TryParse(parts[2], out var startDate))
                     {
                         Console.WriteLine("Invalid date format.");
                         return;
                     }
 
-                    await HandleResyncCommand(serviceProvider, hotelId, date);
+                    DateTime? endDate = null;
+                    if (parts.Length == 4)
+                    {
+                        if (!DateTime.TryParse(parts[3], out var parsedEndDate))
+                        {
+                            Console.WriteLine("Invalid end date format.");
+                            return;
+                        }
+                        endDate = parsedEndDate;
+                    }
+
+                    await HandleResyncCommand(serviceProvider, hotelId, startDate, endDate);
                     break;
 
                 default:
@@ -88,9 +107,12 @@ namespace stayplease_corporate_dashboard_webconsole
             }
         }
 
-        private static async Task HandleResyncCommand(IServiceProvider serviceProvider, int hotelId, DateTime date)
+        private static async Task HandleResyncCommand(IServiceProvider serviceProvider, int hotelId, DateTime startDate, DateTime? endDate)
         {
             var _aggregationCoordinatorService = serviceProvider.GetRequiredService<IAggregationCoordinatorService>();
+            var _dataAggregationService = serviceProvider.GetRequiredService<IDataAggregationService>();
+            var _corporateDashboardService = serviceProvider.GetRequiredService<ICorporateDashboardService>();
+
             var hotels = _aggregationCoordinatorService.GetHotels();
             var hotel = hotels.Find(h => h.HotelID == hotelId);
 
@@ -100,12 +122,21 @@ namespace stayplease_corporate_dashboard_webconsole
                 return;
             }
 
-            Console.WriteLine($"Resyncing data for hotel {hotel.HotelName} on {date:yyyy-MM-dd}...");
+            var _startDate = startDate.Date;
+            var _endDate = startDate.AddDays(1).Date;
+            if (endDate.HasValue)
+            {
+                _endDate = endDate.Value.AddDays(1).Date;
+                Console.WriteLine($"Resyncing data for hotel: {hotel.HotelName} from {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}...");
+            }
+            else {
+                Console.WriteLine($"Resyncing data for hotel: {hotel.HotelName} for {startDate:yyyy-MM-dd}...");
+            }
+            var taskItems = await _dataAggregationService.ProcessingTaskItemAsync(hotel, _startDate, _endDate);
+            var taskItems_backup = await _dataAggregationService.ProcessingTaskItemAsync(hotel, _startDate, _endDate, "", true);
 
-            var startDate = date.Date;
-            var endDate = date.AddDays(1).Date;
-
-            await _aggregationCoordinatorService.CoordinateNotCompletedTaskProcessingAsync(hotel);
+            taskItems.AddRange(taskItems_backup);
+            await _corporateDashboardService.WriteOrUpdateDataInTaskItem(hotel, taskItems, _startDate, _endDate, true, false);
 
             //var corporateDashboardService = serviceProvider.GetRequiredService<ICorporateDashboardService>();
             //await corporateDashboardService.WriteOrUpdateDataInTaskItem(hotel, new List<TaskItemModel>(), date, date, true, false);

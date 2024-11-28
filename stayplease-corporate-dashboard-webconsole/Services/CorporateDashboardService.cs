@@ -1,11 +1,17 @@
 ﻿using Dapper;
+using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
 
 namespace stayplease_corporate_dashboard_webconsole;
 
 public class CorporateDashboardService : ICorporateDashboardService
 {
-    private const string TargetConnectionString = "Server=16.163.102.56;Port=32612;database=stpl_corporate_dashboard;uid=menustaypls;pwd=staypls2019;CharSet=utf8mb4;";
+    private readonly string _connectionString;
+
+    public CorporateDashboardService(IConfiguration configuration)
+    {
+        _connectionString = configuration.GetConnectionString("Default") ?? "";
+    }
 
     #region Insert/Update TaskItems
     public async Task WriteOrUpdateDataInTaskItem(HotelConfig hotel, List<TaskItemModel> data,
@@ -17,7 +23,7 @@ public class CorporateDashboardService : ICorporateDashboardService
             operation += " with Backup";
         }
 
-        using var connection = new MySqlConnection(TargetConnectionString);
+        using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
         using var transaction = await connection.BeginTransactionAsync();
 
@@ -25,17 +31,17 @@ public class CorporateDashboardService : ICorporateDashboardService
         {
             Console.WriteLine($"{operation} started for hotel: {hotel.HotelName}");
 
-            if (reInsert)
-            {
-                var deleteQuery = $"DELETE FROM TaskItems_{hotel.GroupName} WHERE CreateTime BETWEEN @StartDate AND @EndDate AND HotelID = @HotelID";
-                using var deleteCommand = new MySqlCommand(deleteQuery, connection, transaction);
-                deleteCommand.Parameters.AddWithValue("@HotelID", hotel.HotelID);
-                deleteCommand.Parameters.AddWithValue("@StartDate", startDate);
-                deleteCommand.Parameters.AddWithValue("@EndDate", endDate);
+            //if (reInsert)
+            //{
+            //    var deleteQuery = $"DELETE FROM TaskItems_{hotel.GroupName} WHERE CreateTime BETWEEN @StartDate AND @EndDate AND HotelID = @HotelID";
+            //    using var deleteCommand = new MySqlCommand(deleteQuery, connection, transaction);
+            //    deleteCommand.Parameters.AddWithValue("@HotelID", hotel.HotelID);
+            //    deleteCommand.Parameters.AddWithValue("@StartDate", startDate);
+            //    deleteCommand.Parameters.AddWithValue("@EndDate", endDate);
 
-                var rowsDeleted = await deleteCommand.ExecuteNonQueryAsync();
-                Console.WriteLine($"Deleted {rowsDeleted} records for re-insertion.");
-            }
+            //    var rowsDeleted = await deleteCommand.ExecuteNonQueryAsync();
+            //    Console.WriteLine($"Deleted {rowsDeleted} records for re-insertion.");
+            //}
 
             var successCount = 0;
 
@@ -54,7 +60,7 @@ public class CorporateDashboardService : ICorporateDashboardService
                         IsComplaint, PauseReason, RoomStatus_ToDo, ReservStatus_ToDo, 
                         ServiceStatus_ToDo, RoomStatus_Doing, ReservStatus_Doing, 
                         ServiceStatus_Doing, RoomStatus_Done, ReservStatus_Done, 
-                        ServiceStatus_Done, HotelName, HotelID
+                        ServiceStatus_Done, HotelName, HotelID, BelongTo, IsDeleted
                     ) 
                     VALUES 
                     (
@@ -66,7 +72,7 @@ public class CorporateDashboardService : ICorporateDashboardService
                         @IsComplaint, @PauseReason, @RoomStatus_ToDo, @ReservStatus_ToDo, 
                         @ServiceStatus_ToDo, @RoomStatus_Doing, @ReservStatus_Doing, 
                         @ServiceStatus_Doing, @RoomStatus_Done, @ReservStatus_Done, 
-                        @ServiceStatus_Done, @HotelName, @HotelID
+                        @ServiceStatus_Done, @HotelName, @HotelID,  @BelongTo,  @IsDeleted
                     )
                     ON DUPLICATE KEY UPDATE 
                         TaskCategoryID = VALUES(TaskCategoryID), 
@@ -108,7 +114,9 @@ public class CorporateDashboardService : ICorporateDashboardService
                         ServiceStatus_Doing = VALUES(ServiceStatus_Doing), 
                         RoomStatus_Done = VALUES(RoomStatus_Done), 
                         ReservStatus_Done = VALUES(ReservStatus_Done), 
-                        ServiceStatus_Done = VALUES(ServiceStatus_Done)";
+                        ServiceStatus_Done = VALUES(ServiceStatus_Done),
+                        BelongTo = VALUES(BelongTo),
+                        IsDeleted = VALUES(IsDeleted)";
 
                     using var insertCommand = new MySqlCommand(insertQuery, connection, transaction);
 
@@ -158,6 +166,8 @@ public class CorporateDashboardService : ICorporateDashboardService
                         insertCommand.Parameters.AddWithValue("@ServiceStatus_Done", item.ServiceStatus_Done ?? (object)DBNull.Value);
                         insertCommand.Parameters.AddWithValue("@HotelName", hotel.HotelName);
                         insertCommand.Parameters.AddWithValue("@HotelID", hotel.HotelID);
+                        insertCommand.Parameters.AddWithValue("@BelongTo", item.BelongTo ?? (object)DBNull.Value);
+                        insertCommand.Parameters.AddWithValue("@IsDeleted", item.IsDeleted);
 
                         await insertCommand.ExecuteNonQueryAsync();
                         successCount++;
@@ -165,7 +175,7 @@ public class CorporateDashboardService : ICorporateDashboardService
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error inserting batch: {ex.Message}");
+                    Console.WriteLine($"**Error inserting batch: {ex.Message}");
                 }
             }
 
@@ -187,7 +197,7 @@ public class CorporateDashboardService : ICorporateDashboardService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error during {operation} for hotel {hotel.HotelName}: {ex.Message}");
+            Console.WriteLine($"**Error during {operation} for hotel {hotel.HotelName}: {ex.Message}");
             try
             {
                 await transaction.RollbackAsync();
@@ -195,7 +205,7 @@ public class CorporateDashboardService : ICorporateDashboardService
             }
             catch (Exception rollbackEx)
             {
-                Console.WriteLine($"Rollback failed for hotel {hotel.HotelName}: {rollbackEx.Message}");
+                Console.WriteLine($"**Rollback failed for hotel {hotel.HotelName}: {rollbackEx.Message}");
             }
             throw;
         }
@@ -207,9 +217,7 @@ public class CorporateDashboardService : ICorporateDashboardService
     {
         try
         {
-            Console.WriteLine($"Logging sync operation for hotel ID: {log.HotelID}, Table: {log.SyncTable}, Status: {log.SyncStatus}");
-
-            using var connection = new MySqlConnection(TargetConnectionString);
+            using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
             var query = @"
@@ -224,12 +232,10 @@ public class CorporateDashboardService : ICorporateDashboardService
             command.Parameters.AddWithValue("@ErrorMsg", log.ErrorMsg ?? (object)DBNull.Value);
 
             await command.ExecuteNonQueryAsync();
-
-            Console.WriteLine($"Sync log inserted successfully for hotel ID: {log.HotelID}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error inserting sync log for hotel ID: {log.HotelID}: {ex.Message}");
+            Console.WriteLine($"**Error inserting sync log for hotel ID: {log.HotelID}: {ex.Message}");
         }
     }
 
@@ -237,9 +243,7 @@ public class CorporateDashboardService : ICorporateDashboardService
     {
         try
         {
-            Console.WriteLine($"Checking if data has been inserted today for hotel: {hotel.HotelName}, Table: {syncTableName}, Date: {syncDate:yyyy-MM-dd}");
-
-            using var connection = new MySqlConnection(TargetConnectionString);
+            using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
             var query = "SELECT COUNT(1) FROM SyncLogs WHERE SyncDate = @SyncDate AND HotelID = @HotelID AND SyncTable = @SyncTable;";
@@ -249,13 +253,14 @@ public class CorporateDashboardService : ICorporateDashboardService
             command.Parameters.AddWithValue("@SyncTable", syncTableName);
             command.Parameters.AddWithValue("@HotelID", hotel.HotelID);
 
-            var count = (long)await command.ExecuteScalarAsync();
-            Console.WriteLine($"Check complete. Records found: {count}");
+            var result = await command.ExecuteScalarAsync();
+            long? count = result as long?;
+
             return count > 0;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error checking data insertion for hotel {hotel.HotelName}: {ex.Message}");
+            Console.WriteLine($"**Error checking data insertion for hotel {hotel.HotelName}: {ex.Message}");
             return false;
         }
     }
@@ -264,9 +269,7 @@ public class CorporateDashboardService : ICorporateDashboardService
     {
         try
         {
-            Console.WriteLine($"Fetching not completed task items for hotel: {hotel.HotelName}");
-
-            using var connection = new MySqlConnection(TargetConnectionString);
+            using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
             var query = $@"
@@ -279,18 +282,16 @@ public class CorporateDashboardService : ICorporateDashboardService
                 IsComplaint, PauseReason, RoomStatus_ToDo, ReservStatus_ToDo, 
                 ServiceStatus_ToDo, RoomStatus_Doing, ReservStatus_Doing, 
                 ServiceStatus_Doing, RoomStatus_Done, ReservStatus_Done, 
-                ServiceStatus_Done, HotelName, HotelID
+                ServiceStatus_Done, HotelName, HotelID,BelongTo
             FROM TaskItems_{hotel.GroupName}
             WHERE HotelID = @HotelID AND TaskStage != 10";
 
             var result = (await connection.QueryAsync<TaskItemModel>(query, new { HotelID = hotel.HotelID })).ToList();
-
-            Console.WriteLine($"Fetched {result.Count} not completed task items for hotel: {hotel.HotelName}");
             return result;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error fetching not completed task items for hotel {hotel.HotelName}: {ex.Message}");
+            Console.WriteLine($"**Error fetching not completed task items for hotel {hotel.HotelName}: {ex.Message}");
             return new List<TaskItemModel>();
         }
     }

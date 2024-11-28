@@ -62,6 +62,8 @@ public class TaskItemModel
 
     public int IsUrgent { get; set; }
 
+    public int IsDeleted { get; set; }
+
     public int IsComplaint { get; set; }
 
     public string? PauseReason { get; set; }
@@ -84,5 +86,6 @@ public class TaskItemModel
 
     public string? ServiceStatus_Done { get; set; }
 
+    public string? BelongTo { get; set; }
 
 }

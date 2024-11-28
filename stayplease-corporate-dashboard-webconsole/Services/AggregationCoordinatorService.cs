@@ -1,18 +1,10 @@
-﻿using MySql.Data.MySqlClient;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace stayplease_corporate_dashboard_webconsole.Services;
+﻿namespace stayplease_corporate_dashboard_webconsole.Services;
 
 public class AggregationCoordinatorService : IAggregationCoordinatorService
 {
     private readonly IDataAggregationService _dataAggregationService;
     private readonly ICorporateDashboardService _corporateDashboardService;
     private readonly HotelConfiguration _hotelConfiguration;
-
 
     public AggregationCoordinatorService(
         IDataAggregationService dataAggregationService,
@@ -23,7 +15,7 @@ public class AggregationCoordinatorService : IAggregationCoordinatorService
         _hotelConfiguration = hotelConfiguration;
     }
 
-    public async Task CoordinateTaskProcessingAsync(HotelConfig hotel, DateTime startDate, DateTime endDate,  bool useAutoBackup)
+    public async Task CoordinateTaskProcessingAsync(HotelConfig hotel, DateTime startDate, DateTime endDate, bool useAutoBackup)
     {
         var taskItems = await _dataAggregationService.ProcessingTaskItemAsync(hotel, startDate, endDate, "", useAutoBackup);
 
@@ -37,15 +29,24 @@ public class AggregationCoordinatorService : IAggregationCoordinatorService
 
     public async Task CoordinateNotCompletedTaskProcessingAsync(HotelConfig hotel)
     {
+        Console.WriteLine($"Starting not completed task item processing for hotel: {hotel.HotelName}");
+
         var notCompletedTaskItems = await _corporateDashboardService.GetNotCompletedTaskItemAsync(hotel);
         var notcompletedIDs = string.Join(",", notCompletedTaskItems.Select(x => x.MissionID).Distinct().ToList());
+        var count = 0;
+        if (!string.IsNullOrEmpty(notcompletedIDs))
+        {
+            var taskItems = await _dataAggregationService.ProcessingTaskItemAsync(hotel, DateTime.Now, DateTime.Now, notcompletedIDs, false, true);
+            var taskItems_backup = await _dataAggregationService.ProcessingTaskItemAsync(hotel, DateTime.Now, DateTime.Now, notcompletedIDs, true, true);
 
-        var taskItems = await _dataAggregationService.ProcessingTaskItemAsync(hotel, DateTime.Now, DateTime.Now, notcompletedIDs, false);
-        await _corporateDashboardService.WriteOrUpdateDataInTaskItem(hotel, taskItems, DateTime.Now, DateTime.Now, false, false);
+            taskItems.AddRange(taskItems_backup);
 
-        var taskItems_backup = await _dataAggregationService.ProcessingTaskItemAsync(hotel, DateTime.Now, DateTime.Now, notcompletedIDs, true);
-        await _corporateDashboardService.WriteOrUpdateDataInTaskItem(hotel, taskItems_backup, DateTime.Now, DateTime.Now, false, true);
+            await _corporateDashboardService.WriteOrUpdateDataInTaskItem(hotel, taskItems, DateTime.Now, DateTime.Now, true, false);
 
+            count = taskItems.Count;
+        }
+
+        Console.WriteLine($"Not completed Task item processing completed successfully for hotel: {hotel.HotelName}. Records processed: {count}");
     }
 
     public List<HotelConfig> GetHotels() 

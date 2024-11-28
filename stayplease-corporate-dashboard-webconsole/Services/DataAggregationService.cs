@@ -4,13 +4,12 @@ namespace stayplease_corporate_dashboard_webconsole;
 
 public class DataAggregationService : IDataAggregationService
 {
-    public async Task<List<TaskItemModel>> ProcessingTaskItemAsync(HotelConfig hotel, DateTime startDate, DateTime endDate, string notcompletedIDs = "", bool useAutoBackup = false)
+    public async Task<List<TaskItemModel>> ProcessingTaskItemAsync(HotelConfig hotel, DateTime startDate, DateTime endDate, string notcompletedIDs = "", bool useAutoBackup = false, bool isNotCompleted = false)
     {
         List<TaskItemModel> taskItemList = new();
 
         try
         {
-            Console.WriteLine($"Starting task item processing for hotel: {hotel.HotelName}, date range: {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}.");
 
             var roomStatusList = await GetRoomStatusAsync(hotel);
 
@@ -50,8 +49,8 @@ public class DataAggregationService : IDataAggregationService
                                             subTasks.Any(x => x.TaskType == 3 || x.TaskType == 4);
 
                         doneRoomStatus = !hasInspection && taskItem.TaskStatus == 15
-                            ? roomStatusModel.SelfCheckStatus
-                            : roomStatusModel.AfterCleanStatusName;
+                            ? roomStatusModel.SelfCheckStatus ?? ""
+                            : roomStatusModel.AfterCleanStatusName ?? "";
                     }
                 }
 
@@ -66,18 +65,41 @@ public class DataAggregationService : IDataAggregationService
                 taskItem.RoomStatus_Done = doneRoomStatus;
                 taskItem.ReservStatus_Done = doneReservStatus;
                 taskItem.ServiceStatus_Done = doneServiceStatus;
+
+                switch (hotel.HotelID) 
+                {
+                    case 60:
+                        if (taskItem.ZoneName.EndsWith("-PPS"))
+                            taskItem.BelongTo = hotel.OtherHotelName;
+                        else if (taskItem.LocationType != 2)
+                            taskItem.BelongTo = hotel.HotelName;
+                        else
+                            taskItem.BelongTo = hotel.HotelName + "&" + hotel.OtherHotelName;
+
+                        break;
+                    case 143:
+                        if (taskItem.ZoneName.StartsWith("PR"))
+                            taskItem.BelongTo = hotel.HotelName;
+                        else if (taskItem.ZoneName.StartsWith("PP"))
+                            taskItem.BelongTo = hotel.OtherHotelName;
+                        else
+                            taskItem.BelongTo = hotel.HotelName + "&" + hotel.OtherHotelName;
+
+                        break;
+                    default:
+                        taskItem.BelongTo = hotel.HotelName;
+                        break;
+                }
             }
 
-            (string roomStatus, string reservStatus, string serviceStatus) GetStatusValues(TaskLocationStatusLogModel status)
+            (string roomStatus, string reservStatus, string serviceStatus) GetStatusValues(TaskLocationStatusLogModel? status)
             {
                 return (status?.RoomStatus ?? "", status?.ReservStatus ?? "", status?.ServiceStatus ?? "");
             }
-
-            Console.WriteLine($"Task item processing completed successfully for hotel: {hotel.HotelName}.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error processing task items for hotel {hotel.HotelName}: {ex.Message}");
+            Console.WriteLine($"**Error processing task items for hotel {hotel.HotelName}: {ex.Message}");
         }
 
         return taskItemList;
@@ -87,8 +109,7 @@ public class DataAggregationService : IDataAggregationService
     {
         try
         {
-            Console.WriteLine($"{(string.IsNullOrEmpty(notcompletedIDs) ? "" : "Update Not Completed Task")} Fetching task items for hotel: {hotel.HotelName}");
-            var queryConditions = " AND STT.ToDoTime BETWEEN @StartDate AND @EndDate ";
+            var queryConditions = " AND DATE_ADD(STT.ToDoTime, interval @TimeZone MINUTE) BETWEEN @StartDate AND @EndDate ";
             if (!string.IsNullOrEmpty(notcompletedIDs))
                 queryConditions = " AND STI.ID IN ('" + notcompletedIDs.Replace(",", "','") + "') ";
 
@@ -98,15 +119,14 @@ public class DataAggregationService : IDataAggregationService
                     StartDate = startDate,
                     EndDate = endDate,
                     TenantId = hotel.HotelID,
-                    TimeZone = GetTimeZoneOffset(hotel.TimeZone)
+                    TimeZone = GetTimeZoneOffset(hotel.TimeZone ?? "")
                 }, useAutoBackup, queryConditions);
 
-            Console.WriteLine($"Fetched {taskItems.Count} task items for hotel: {hotel.HotelName}.");
             return taskItems;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error fetching task items for hotel {hotel.HotelName}: {ex.Message}");
+            Console.WriteLine($"**Error fetching task items for hotel {hotel.HotelName}: {ex.Message}");
             return new List<TaskItemModel>();
         }
     }
@@ -115,19 +135,17 @@ public class DataAggregationService : IDataAggregationService
     {
         try
         {
-            Console.WriteLine($"Fetching task location status logs for hotel: {hotel.HotelName}.");
             var queryConditions = " AND TaskId IN ('" + IDs.Replace(",", "','") + "') ";
 
             var logs = (await ExecuteQueryAsync<TaskLocationStatusLogModel>(hotel.ConnectionString, Queries.QueryTaskLocationStatusLogs, "", useAutoBackup, queryConditions))
                 .GroupBy(x => x.TaskID)
                 .ToDictionary(group => group.Key, group => group.OrderBy(x => x.CreationTime).ToList());
 
-            Console.WriteLine($"Fetched {logs.Count} task location status logs for hotel: {hotel.HotelName}.");
             return logs;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error fetching task location status logs for hotel {hotel.HotelName}: {ex.Message}");
+            Console.WriteLine($"**Error fetching task location status logs for hotel {hotel.HotelName}: {ex.Message}");
             return new Dictionary<long, List<TaskLocationStatusLogModel>>();
         }
     }
@@ -136,22 +154,23 @@ public class DataAggregationService : IDataAggregationService
     {
         try
         {
-            Console.WriteLine($"Fetching room statuses for hotel: {hotel.HotelName}.");
             var sql = "SELECT RoomStatusName,SelfCheckStatus, AfterCleanStatusName, AfterCheckStatusName FROM sproomstatus WHERE RoomStatusType = 1;";
             var roomStatuses = await ExecuteQueryAsync<RoomStatusModel>(hotel.ConnectionString, sql, "", useAutoBackup);
 
-            var result = roomStatuses.ToDictionary(item => item.RoomStatusName, item => item);
-            Console.WriteLine($"Fetched {result.Count} room statuses for hotel: {hotel.HotelName}.");
+            var result = roomStatuses
+                .Where(item => item.RoomStatusName != null) 
+                .ToDictionary(item => item.RoomStatusName!, item => item);
+
             return result;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error fetching room statuses for hotel {hotel.HotelName}: {ex.Message}");
+            Console.WriteLine($"**Error fetching room statuses for hotel {hotel.HotelName}: {ex.Message}");
             return new Dictionary<string, RoomStatusModel>();
         }
     }
 
-    private async Task<List<T>> ExecuteQueryAsync<T>(string connectionString, string query, object parameters, bool useAutoBackup = false, string queryConditions = "")
+    private async Task<List<T>> ExecuteQueryAsync<T>(string? connectionString, string query, object parameters, bool useAutoBackup = false, string queryConditions = "")
     {
         try
         {
@@ -161,12 +180,11 @@ public class DataAggregationService : IDataAggregationService
             var mappedQuery = ReplaceTableNames(query, useAutoBackup, queryConditions);
             var results = (await connection.QueryAsync<T>(mappedQuery, parameters)).ToList();
 
-            Console.WriteLine($"Query executed successfully. Retrieved {results.Count} records.");
             return results;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error executing query: {ex.Message}");
+            Console.WriteLine($"**Error executing query: {ex.Message}");
             return new List<T>();
         }
     }

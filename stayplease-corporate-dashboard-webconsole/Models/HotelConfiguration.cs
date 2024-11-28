@@ -26,6 +26,7 @@ public class HotelConfiguration
             HotelName = "PRCKUL",
             ConnectionString = "Data Source=sp-rds-sgp1.cr0z6rjtgupv.ap-southeast-1.rds.amazonaws.com; Port=3306; Database=staypleasev3_hskp_prckul; User ID=admin; Password=32CpaG!#$123; ConnectionTimeout=20; sslMode=None;Pooling=False;Character Set=utf8mb4;",
             TimeZone = "Singapore Standard Time",
+            OtherHotelName = "PPSKUL",
             GroupName = "PPHG"
         }
         ,new HotelConfig
@@ -34,6 +35,14 @@ public class HotelConfiguration
             HotelName = "PRSYP",
             ConnectionString = "Data Source=sp-rds-sgp1.cr0z6rjtgupv.ap-southeast-1.rds.amazonaws.com; Port=3306; Database=staypleasev3_hskp_prsyp; User ID=admin; Password=32CpaG!#$123; ConnectionTimeout=20; sslMode=None;Pooling=False;Character Set=utf8mb4",
             TimeZone = "AUS Eastern Standard Time",
+            GroupName = "PPHG"
+        }        
+        ,new HotelConfig
+        {
+            HotelID = 63,
+            HotelName = "PRSSIN",
+            ConnectionString = "Data Source=sp-rds-sgp1.cr0z6rjtgupv.ap-southeast-1.rds.amazonaws.com; Port=3306; Database=staypleasev3_hskp_prssin; User ID=admin; Password=32CpaG!#$123; ConnectionTimeout=20; sslMode=None;Pooling=False;Character Set=utf8mb4",
+            TimeZone = "Singapore Standard Time",
             GroupName = "PPHG"
         }
     };
