@@ -51,6 +51,8 @@ public class DataAggregationScheduler
                     _processedHotels[hotel.HotelID] = localTime;
 
                     Console.WriteLine($"Data processing completed for hotel: {hotel.HotelName}. [{DateTime.UtcNow.AddHours(8):yyyy-MM-dd HH:mm:ss}]");
+                    Console.WriteLine("");
+                    Console.WriteLine("");
                 }
             }
         }

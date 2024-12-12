@@ -41,7 +41,7 @@ public class AggregationCoordinatorService : IAggregationCoordinatorService
 
             taskItems.AddRange(taskItems_backup);
 
-            await _corporateDashboardService.WriteOrUpdateDataInTaskItem(hotel, taskItems, DateTime.Now, DateTime.Now, true, false);
+            await _corporateDashboardService.WriteOrUpdateDataInTaskItem(hotel, taskItems, DateTime.Now, DateTime.Now, false, true);
 
             count = taskItems.Count;
         }

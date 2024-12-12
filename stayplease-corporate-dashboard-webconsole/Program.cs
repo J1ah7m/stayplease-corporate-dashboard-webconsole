@@ -75,10 +75,16 @@ namespace stayplease_corporate_dashboard_webconsole
                         return;
                     }
 
-                    if (!int.TryParse(parts[1], out var hotelId))
+                    var hotelIdStrings = parts[1].Split(',', StringSplitOptions.RemoveEmptyEntries);
+                    var hotelIds = new List<int>();
+                    foreach (var hotelIdString in hotelIdStrings)
                     {
-                        Console.WriteLine("Invalid Hotel ID.");
-                        return;
+                        if (!int.TryParse(hotelIdString, out var hotelId))
+                        {
+                            Console.WriteLine($"Invalid Hotel ID: {hotelIdString}");
+                            return;
+                        }
+                        hotelIds.Add(hotelId);
                     }
 
                     if (!DateTime.TryParse(parts[2], out var startDate))
@@ -98,7 +104,7 @@ namespace stayplease_corporate_dashboard_webconsole
                         endDate = parsedEndDate;
                     }
 
-                    await HandleResyncCommand(serviceProvider, hotelId, startDate, endDate);
+                    await HandleResyncCommand(serviceProvider, hotelIds, startDate, endDate);
                     break;
 
                 default:
@@ -107,41 +113,51 @@ namespace stayplease_corporate_dashboard_webconsole
             }
         }
 
-        private static async Task HandleResyncCommand(IServiceProvider serviceProvider, int hotelId, DateTime startDate, DateTime? endDate)
+        private static async Task HandleResyncCommand(IServiceProvider serviceProvider, List<int> hotelIds, DateTime startDate, DateTime? endDate)
         {
             var _aggregationCoordinatorService = serviceProvider.GetRequiredService<IAggregationCoordinatorService>();
             var _dataAggregationService = serviceProvider.GetRequiredService<IDataAggregationService>();
             var _corporateDashboardService = serviceProvider.GetRequiredService<ICorporateDashboardService>();
 
             var hotels = _aggregationCoordinatorService.GetHotels();
-            var hotel = hotels.Find(h => h.HotelID == hotelId);
 
-            if (hotel == null)
+            foreach (var hotelId in hotelIds)
             {
-                Console.WriteLine($"Hotel with ID {hotelId} not found.");
-                return;
-            }
+                var hotel = hotels.Find(h => h.HotelID == hotelId);
 
-            var _startDate = startDate.Date;
-            var _endDate = startDate.AddDays(1).Date;
-            if (endDate.HasValue)
-            {
-                _endDate = endDate.Value.AddDays(1).Date;
-                Console.WriteLine($"Resyncing data for hotel: {hotel.HotelName} from {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}...");
-            }
-            else {
-                Console.WriteLine($"Resyncing data for hotel: {hotel.HotelName} for {startDate:yyyy-MM-dd}...");
-            }
-            var taskItems = await _dataAggregationService.ProcessingTaskItemAsync(hotel, _startDate, _endDate);
-            var taskItems_backup = await _dataAggregationService.ProcessingTaskItemAsync(hotel, _startDate, _endDate, "", true);
+                if (hotel == null)
+                {
+                    Console.WriteLine($"Hotel with ID {hotelId} not found.");
+                    return;
+                }
 
-            taskItems.AddRange(taskItems_backup);
-            await _corporateDashboardService.WriteOrUpdateDataInTaskItem(hotel, taskItems, _startDate, _endDate, true, false);
+                var _startDate = startDate.Date;
+                var _endDate = startDate.AddDays(1).Date;
+                if (endDate.HasValue)
+                {
+                    _endDate = endDate.Value.AddDays(1).Date;
+                    Console.WriteLine($"Resyncing data for hotel: {hotel.HotelName} from {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}...");
+                }
+                else
+                {
+                    Console.WriteLine($"Resyncing data for hotel: {hotel.HotelName} for {startDate:yyyy-MM-dd}...");
+                }
+                var taskItems = await _dataAggregationService.ProcessingTaskItemAsync(hotel, _startDate, _endDate);
+                var taskItems_backup = await _dataAggregationService.ProcessingTaskItemAsync(hotel, _startDate, _endDate, "", true);
+
+                taskItems.AddRange(taskItems_backup);
+                await _corporateDashboardService.WriteOrUpdateDataInTaskItem(hotel, taskItems, _startDate, _endDate, true, false);
+
+                await Task.Delay(100);
+                Console.WriteLine($"Resync completed for hotel {hotel.HotelName}.");
+                Console.WriteLine("");
+            }
+                
 
             //var corporateDashboardService = serviceProvider.GetRequiredService<ICorporateDashboardService>();
             //await corporateDashboardService.WriteOrUpdateDataInTaskItem(hotel, new List<TaskItemModel>(), date, date, true, false);
 
-            Console.WriteLine($"Resync completed for hotel {hotel.HotelName}.");
+
         }
     }
 }
