@@ -31,18 +31,6 @@ public class CorporateDashboardService : ICorporateDashboardService
         {
             Console.WriteLine($"{operation} started for hotel: {hotel.HotelName}");
 
-            //if (reInsert)
-            //{
-            //    var deleteQuery = $"DELETE FROM TaskItems_{hotel.GroupName} WHERE CreateTime BETWEEN @StartDate AND @EndDate AND HotelID = @HotelID";
-            //    using var deleteCommand = new MySqlCommand(deleteQuery, connection, transaction);
-            //    deleteCommand.Parameters.AddWithValue("@HotelID", hotel.HotelID);
-            //    deleteCommand.Parameters.AddWithValue("@StartDate", startDate);
-            //    deleteCommand.Parameters.AddWithValue("@EndDate", endDate);
-
-            //    var rowsDeleted = await deleteCommand.ExecuteNonQueryAsync();
-            //    Console.WriteLine($"Deleted {rowsDeleted} records for re-insertion.");
-            //}
-
             var successCount = 0;
 
             foreach (var batch in data.Chunk(500))
@@ -189,6 +177,7 @@ public class CorporateDashboardService : ICorporateDashboardService
                 {
                     HotelID = hotel.HotelID,
                     SyncTable = "TaskItems",
+                    SyncDate = startDate.Value.ToString("yyyy-MM-dd"),
                     SyncStatus = "Success",
                     ErrorMsg = null
                 });
@@ -213,7 +202,7 @@ public class CorporateDashboardService : ICorporateDashboardService
 
     #endregion
 
-    public async Task InsertSyncLog(SyncLogModel log)
+    private async Task InsertSyncLog(SyncLogModel log)
     {
         try
         {
@@ -227,7 +216,7 @@ public class CorporateDashboardService : ICorporateDashboardService
             using var command = new MySqlCommand(query, connection);
             command.Parameters.AddWithValue("@HotelID", log.HotelID);
             command.Parameters.AddWithValue("@SyncTable", log.SyncTable ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@SyncDate", DateTime.UtcNow.AddMinutes(480).ToString("yyyy-MM-dd"));
+            command.Parameters.AddWithValue("@SyncDate", log.SyncDate);
             command.Parameters.AddWithValue("@SyncStatus", log.SyncStatus);
             command.Parameters.AddWithValue("@ErrorMsg", log.ErrorMsg ?? (object)DBNull.Value);
 

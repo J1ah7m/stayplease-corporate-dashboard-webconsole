@@ -110,35 +110,8 @@ public class DataAggregationService : IDataAggregationService
         try
         {
             var queryConditions = " AND DATE_ADD(STT.ToDoTime, interval @TimeZone MINUTE) BETWEEN @StartDate AND @EndDate ";
-            //var queryConditions = " AND STI.Id = 252955 ";
             if (!string.IsNullOrEmpty(notcompletedIDs))
                 queryConditions = " AND STI.ID IN ('" + notcompletedIDs.Replace(",", "','") + "') ";
-
-            //var batchSize = TimeSpan.FromDays(1); // 每次处理1天的数据
-            //var currentStartDate = startDate;
-
-            //while (currentStartDate < endDate)
-            //{
-            //    var currentEndDate = currentStartDate + batchSize;
-            //    if (currentEndDate > endDate)
-            //        currentEndDate = endDate;
-
-            //    var taskItems = await GetTaskItemListAsync(hotel, currentStartDate, currentEndDate, notcompletedIDs, useAutoBackup);
-            //    allTaskItems.AddRange(taskItems);
-
-            //    currentStartDate = currentEndDate;
-            //}
-
-            //var taskItems = await ExecuteQueryAsync<TaskItemModel>(hotel.ConnectionString, Queries.QueryTaskItemList,
-            //    new
-            //    {
-            //        StartDate = startDate,
-            //        EndDate = endDate,
-            //        TenantId = hotel.HotelID,
-            //        TimeZone = GetTimeZoneOffset(hotel.TimeZone ?? "")
-            //    }, useAutoBackup, queryConditions);
-
-            //return taskItems;
 
             var allTaskItems = new List<TaskItemModel>();
             var batchSize = TimeSpan.FromDays(1); // 每次处理1天的数据

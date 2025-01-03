@@ -36,7 +36,7 @@ public class DataAggregationScheduler
                     var startDate = localTime.AddDays(-1).Date;
                     var endDate = localTime.Date;
 
-                    Console.WriteLine("=======================================");
+                    Console.WriteLine("==================================[START]============================================");
                     Console.WriteLine($"Processing data for hotel: {hotel.HotelName}... date: {startDate:yyyy-MM-dd HH:mm}");
 
                     var taskItemsHasData = await _aggregationService.HasDataInsertedToday(hotel, startDate, "TaskItems");
@@ -45,13 +45,13 @@ public class DataAggregationScheduler
                         Console.WriteLine($"Starting task item processing for hotel: {hotel.HotelName}, date range: {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}. [{DateTime.UtcNow.AddHours(8):yyyy-MM-dd HH:mm:ss}]");
                         await _aggregationService.CoordinateTaskProcessingAsync(hotel, startDate, endDate, false);
                     }
-                    Console.WriteLine(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+                    Console.WriteLine("");
                     await _aggregationService.CoordinateNotCompletedTaskProcessingAsync(hotel);
 
                     _processedHotels[hotel.HotelID] = localTime;
 
                     Console.WriteLine($"Data processing completed for hotel: {hotel.HotelName}. [{DateTime.UtcNow.AddHours(8):yyyy-MM-dd HH:mm:ss}]");
-                    Console.WriteLine("");
+                    Console.WriteLine("==================================[END]============================================");
                     Console.WriteLine("");
                 }
             }

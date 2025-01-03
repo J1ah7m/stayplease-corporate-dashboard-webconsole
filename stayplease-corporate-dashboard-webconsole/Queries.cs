@@ -19,7 +19,7 @@ public static class Queries
             DATE_ADD(STT.PauseTime, INTERVAL @TimeZone MINUTE) AS PauseTime,
             DATE_ADD(STTL.CreationTime, INTERVAL @TimeZone MINUTE) AS FirstDoingTime,
             DATE_ADD(STT.ScheduleTime, INTERVAL @TimeZone MINUTE) AS ScheduleTime,
-            SZ.Description AS ZoneName,
+            SZ.Name AS ZoneName,
             STI.LocationId,
             SZ.Id AS ZoneID,
             (CASE STI.MetricId 
